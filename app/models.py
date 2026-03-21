@@ -1,9 +1,16 @@
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class MealRequest(BaseModel):
     description: str = Field(..., min_length=3, max_length=500)
+
+    @field_validator("description")
+    @classmethod
+    def description_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("description must not be blank or whitespace-only")
+        return v
 
 
 class MealRecord(BaseModel):
