@@ -127,7 +127,7 @@ def build_recent_html(meals):
         <span class="nm-pill nm-pill-carb">W {m['carbs']:.0f}g</span>
         <span class="nm-pill nm-pill-fat">T {m['fat']:.0f}g</span>
     </div>
-</div>""" for m in meals[:6])
+</div>""" for m in meals)
     return f'<div class="nm-meal-list">{rows}</div>'
 
 
@@ -326,6 +326,11 @@ CSS = (
     ".nm-ri.fat .nm-ri-v{color:var(--fat);}"
 
     # Recent meals
+    ".nm-meal-list{max-height:340px;overflow-y:auto;scrollbar-width:thin;"
+    "scrollbar-color:var(--brd) transparent;}"
+    ".nm-meal-list::-webkit-scrollbar{width:4px;}"
+    ".nm-meal-list::-webkit-scrollbar-track{background:transparent;}"
+    ".nm-meal-list::-webkit-scrollbar-thumb{background:var(--brd);border-radius:2px;}"
     ".nm-row{display:flex;justify-content:space-between;align-items:center;"
     "padding:11px 0;border-bottom:1px solid var(--brd);gap:12px;}"
     ".nm-row:last-child{border-bottom:none;}"
