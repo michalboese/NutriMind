@@ -17,14 +17,7 @@ from app.database import get_daily_summary, get_meals, init_db, save_meal
 # ---------------------------------------------------------------------------
 
 def run(coro):
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            raise RuntimeError
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop.run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def format_meals_table(meals: list[dict]) -> list[list]:
@@ -51,7 +44,7 @@ def handle_analyze(description: str):
     description = description.strip()
     if not description:
         return (
-            gr.update(value="Wprowadź opis posiłku.", visible=True),
+            gr.update(value="Wprowadź opis posiłku. / Please enter a meal description.", visible=True),
             gr.update(visible=False),
         )
     try:
@@ -59,7 +52,7 @@ def handle_analyze(description: str):
         run(save_meal(description, analysis))
     except Exception as e:
         return (
-            gr.update(value=f"Błąd: {e}", visible=True),
+            gr.update(value=f"Błąd / Error: {e}", visible=True),
             gr.update(visible=False),
         )
 
@@ -88,7 +81,7 @@ def handle_load_history(filter_date: str):
     try:
         meals = run(get_meals(for_date=date_str))
     except Exception as e:
-        return [], f"Błąd: {e}"
+        return [], f"Błąd / Error: {e}"
     return format_meals_table(meals), f"{len(meals)} posiłk{'ów' if len(meals) != 1 else ''} znaleziono."
 
 
@@ -101,10 +94,10 @@ def handle_summary(summary_date: str):
     try:
         s = run(get_daily_summary(for_date=date_str))
     except Exception as e:
-        return f"Błąd: {e}"
+        return f"Błąd / Error: {e}"
     if not s:
         label = date_str or date.today().isoformat()
-        return f"Brak posiłków dla {label}."
+        return f"Brak posiłków dla {label}. / No meals found for {label}."
 
     return f"""
 ## Podsumowanie: {s['date']}
@@ -122,8 +115,6 @@ def handle_summary(summary_date: str):
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
-
-asyncio.run(init_db())
 
 with gr.Blocks(title="Calorie Agent") as demo:
     gr.Markdown("# 🥗 Calorie Agent\nOpisz posiłek po polsku lub angielsku — agent wyliczy kalorie i makroskładniki.")
@@ -186,4 +177,5 @@ with gr.Blocks(title="Calorie Agent") as demo:
 
 
 if __name__ == "__main__":
+    asyncio.run(init_db())
     demo.launch(server_name="0.0.0.0", server_port=7860, theme=gr.themes.Soft())
