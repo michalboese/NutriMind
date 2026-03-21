@@ -29,14 +29,43 @@ def _meal_count_label(n):
 # HTML builders
 # ---------------------------------------------------------------------------
 
+GOALS = {"calories": 2000, "protein": 150, "carbs": 250, "fat": 70}
+
+
+def _ring(pct: int, hex_color: str) -> str:
+    """SVG donut ring showing percentage of daily goal."""
+    r, sw = 34, 7
+    circ = 2 * 3.14159 * r
+    fill = min(pct / 100 * circ, circ)
+    gap  = circ - fill
+    return (
+        f'<svg width="86" height="86" viewBox="0 0 86 86" style="display:block;flex-shrink:0">'
+        f'<circle cx="43" cy="43" r="{r}" fill="none" stroke="var(--brd)" stroke-width="{sw}"/>'
+        f'<circle cx="43" cy="43" r="{r}" fill="none" stroke="{hex_color}" stroke-width="{sw}" '
+        f'stroke-dasharray="{fill:.1f} {gap:.1f}" stroke-linecap="round" '
+        f'transform="rotate(-90 43 43)"/>'
+        f'<text x="43" y="47" text-anchor="middle" font-size="13" font-weight="700" '
+        f'fill="{hex_color}" font-family="sans-serif">{pct}%</text>'
+        f'</svg>'
+    )
+
+
 def build_stats_html(summary):
     s = summary or {
         "total_calories": 0, "total_protein": 0.0,
         "total_carbs": 0.0, "total_fat": 0.0, "meal_count": 0,
     }
-    goal = 2000
-    pct  = min(100, round(s["total_calories"] / goal * 100))
     today_str = date.today().strftime("%A, %d %B %Y")
+
+    pct_cal  = min(100, round(s["total_calories"]       / GOALS["calories"] * 100))
+    pct_pro  = min(100, round(s["total_protein"]        / GOALS["protein"]  * 100))
+    pct_carb = min(100, round(s["total_carbs"]          / GOALS["carbs"]    * 100))
+    pct_fat  = min(100, round(s["total_fat"]            / GOALS["fat"]      * 100))
+
+    ring_cal  = _ring(pct_cal,  "#f97316")
+    ring_pro  = _ring(pct_pro,  "#3fb950")
+    ring_carb = _ring(pct_carb, "#58a6ff")
+    ring_fat  = _ring(pct_fat,  "#f0c24b")
 
     return f"""
 <div class="nm-page-header">
@@ -45,22 +74,44 @@ def build_stats_html(summary):
 </div>
 <div class="nm-stats">
     <div class="nm-card nm-card-cal">
-        <div class="nm-card-head"><span class="nm-ico">&#128293;</span>Kalorie</div>
-        <div class="nm-card-val">{s['total_calories']}<span class="nm-card-unit"> kcal</span></div>
-        <div class="nm-bar"><div class="nm-bar-fill" style="width:{pct}%;background:var(--cal)"></div></div>
-        <div class="nm-bar-lbl">{pct}% dziennego celu ({goal} kcal)</div>
+        <div class="nm-card-head">🔥 Kalorie</div>
+        <div class="nm-card-body">
+            {ring_cal}
+            <div>
+                <div class="nm-card-val">{s['total_calories']}<span class="nm-card-unit"> kcal</span></div>
+                <div class="nm-card-goal">cel: {GOALS['calories']} kcal</div>
+            </div>
+        </div>
     </div>
     <div class="nm-card nm-card-pro">
-        <div class="nm-card-head"><span class="nm-ico">&#128170;</span>Białko</div>
-        <div class="nm-card-val">{s['total_protein']:.1f}<span class="nm-card-unit"> g</span></div>
+        <div class="nm-card-head">💪 Białko</div>
+        <div class="nm-card-body">
+            {ring_pro}
+            <div>
+                <div class="nm-card-val">{s['total_protein']:.1f}<span class="nm-card-unit"> g</span></div>
+                <div class="nm-card-goal">cel: {GOALS['protein']} g</div>
+            </div>
+        </div>
     </div>
     <div class="nm-card nm-card-carb">
-        <div class="nm-card-head"><span class="nm-ico">&#127806;</span>Węglowodany</div>
-        <div class="nm-card-val">{s['total_carbs']:.1f}<span class="nm-card-unit"> g</span></div>
+        <div class="nm-card-head">🌾 Węglowodany</div>
+        <div class="nm-card-body">
+            {ring_carb}
+            <div>
+                <div class="nm-card-val">{s['total_carbs']:.1f}<span class="nm-card-unit"> g</span></div>
+                <div class="nm-card-goal">cel: {GOALS['carbs']} g</div>
+            </div>
+        </div>
     </div>
     <div class="nm-card nm-card-fat">
-        <div class="nm-card-head"><span class="nm-ico">&#129361;</span>Tłuszcze</div>
-        <div class="nm-card-val">{s['total_fat']:.1f}<span class="nm-card-unit"> g</span></div>
+        <div class="nm-card-head">🥑 Tłuszcze</div>
+        <div class="nm-card-body">
+            {ring_fat}
+            <div>
+                <div class="nm-card-val">{s['total_fat']:.1f}<span class="nm-card-unit"> g</span></div>
+                <div class="nm-card-goal">cel: {GOALS['fat']} g</div>
+            </div>
+        </div>
     </div>
 </div>"""
 
@@ -227,13 +278,11 @@ CSS = (
     ".nm-card-carb::before{background:var(--carb);}"
     ".nm-card-fat::before{background:var(--fat);}"
     ".nm-card-head{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;"
-    "color:var(--mut);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;}"
-    ".nm-ico{font-size:15px;}"
-    ".nm-card-val{font-size:32px;font-weight:700;color:var(--txt);line-height:1;}"
-    ".nm-card-unit{font-size:15px;font-weight:400;color:var(--mut);}"
-    ".nm-bar{margin-top:14px;height:4px;background:var(--brd);border-radius:2px;overflow:hidden;}"
-    ".nm-bar-fill{height:100%;border-radius:2px;transition:width .7s ease;}"
-    ".nm-bar-lbl{font-size:11px;color:var(--mut);margin-top:5px;}"
+    "color:var(--mut);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;}"
+    ".nm-card-body{display:flex;align-items:center;gap:14px;}"
+    ".nm-card-val{font-size:26px;font-weight:700;color:var(--txt);line-height:1;}"
+    ".nm-card-unit{font-size:13px;font-weight:400;color:var(--mut);}"
+    ".nm-card-goal{font-size:11px;color:var(--mut);margin-top:5px;}"
 
     # Sections
     ".nm-section{background:var(--card);border:1px solid var(--brd);border-radius:var(--r);"
@@ -341,33 +390,32 @@ with gr.Blocks(title="NutriMind") as demo:
             '</div>'
         )
         with gr.Column(elem_classes=["nm-nav"]):
-            btn_dash = gr.Button("&#127968;  Dashboard", elem_classes=["nm-nav-active"])
-            btn_hist = gr.Button("&#128203;  Historia")
+            btn_dash = gr.Button("🏠  Dashboard", elem_classes=["nm-nav-active"])
+            btn_hist = gr.Button("📋  Historia")
         with gr.Column(elem_classes=["nm-theme-wrap"]):
-            btn_theme = gr.Button("&#9728;&#65039;  Jasny motyw", elem_id="nm-theme-btn")
+            btn_theme = gr.Button("☀️  Jasny motyw", elem_id="nm-theme-btn")
 
     # ── Dashboard ─────────────────────────────────────────────────────────────
     with gr.Column(visible=True, elem_classes=["nm-main"]) as page_dash:
 
         stats_out = gr.HTML(build_stats_html(None))
 
-        with gr.Row(equal_height=False):
-            with gr.Column(scale=1, elem_classes=["nm-section"]):
-                gr.HTML('<div class="nm-section-title">&#10133; Dodaj posiłek</div>')
-                meal_input = gr.Textbox(
-                    label="Opis posiłku",
-                    placeholder="np. owsianka z bananem i masłem orzechowym, 300g...",
-                    lines=3,
-                )
-                with gr.Row():
-                    with gr.Column(elem_classes=["nm-cta"], scale=0, min_width=170):
-                        btn_analyze = gr.Button("Analizuj posiłek")
-                error_out  = gr.HTML(visible=False)
-                result_out = gr.HTML(visible=False)
+        with gr.Column(elem_classes=["nm-section"]):
+            gr.HTML('<div class="nm-section-title">🕐 Dzisiejsze posiłki</div>')
+            recent_out = gr.HTML(build_recent_html([]))
 
-            with gr.Column(scale=1, elem_classes=["nm-section"]):
-                gr.HTML('<div class="nm-section-title">&#128336; Dzisiejsze posiłki</div>')
-                recent_out = gr.HTML(build_recent_html([]))
+        with gr.Column(elem_classes=["nm-section"]):
+            gr.HTML('<div class="nm-section-title">➕ Dodaj posiłek</div>')
+            meal_input = gr.Textbox(
+                label="Opis posiłku",
+                placeholder="np. owsianka z bananem i masłem orzechowym, 300g...",
+                lines=3,
+            )
+            with gr.Row():
+                with gr.Column(elem_classes=["nm-cta"], scale=0, min_width=170):
+                    btn_analyze = gr.Button("Analizuj posiłek")
+            error_out  = gr.HTML(visible=False)
+            result_out = gr.HTML(visible=False)
 
     # ── Historia ──────────────────────────────────────────────────────────────
     with gr.Column(visible=False, elem_classes=["nm-main"]) as page_hist:
