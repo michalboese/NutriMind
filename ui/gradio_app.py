@@ -15,10 +15,6 @@ from app.database import get_daily_summary, get_meals, init_db, save_meal
 # Helpers
 # ---------------------------------------------------------------------------
 
-def run(coro):
-    return asyncio.run(coro)
-
-
 def _meal_count_label(n):
     if n == 1:      return "1 posiłek"
     if 2 <= n <= 4: return f"{n} posiłki"
@@ -152,36 +148,38 @@ def build_result_html(a):
 # Event handlers
 # ---------------------------------------------------------------------------
 
-def handle_analyze(description):
+async def handle_analyze(description):
     desc = description.strip()
     if not desc:
         return (
-            gr.update(value='<div class="nm-error">&#9888;&#65039; Wprowadź opis posiłku.</div>', visible=True),
+            gr.update(value='<div class="nm-error">⚠️ Wprowadź opis posiłku.</div>', visible=True),
             gr.update(visible=False),
             gr.update(), gr.update(),
         )
     try:
-        analysis = run(analyze_meal(desc))
-        run(save_meal(desc, analysis))
+        analysis = await analyze_meal(desc)
+        await save_meal(desc, analysis)
     except Exception as e:
         return (
-            gr.update(value=f'<div class="nm-error">&#9888;&#65039; Błąd: {e}</div>', visible=True),
+            gr.update(value=f'<div class="nm-error">⚠️ Błąd: {e}</div>', visible=True),
             gr.update(visible=False),
             gr.update(), gr.update(),
         )
     today = date.today().isoformat()
+    summary = await get_daily_summary(for_date=today)
+    recent  = await get_meals(for_date=today)
     return (
         gr.update(value="", visible=False),
         gr.update(value=build_result_html(analysis), visible=True),
-        gr.update(value=build_stats_html(run(get_daily_summary(for_date=today)))),
-        gr.update(value=build_recent_html(run(get_meals(for_date=today)))),
+        gr.update(value=build_stats_html(summary)),
+        gr.update(value=build_recent_html(recent)),
     )
 
 
-def handle_history(filter_date):
+async def handle_history(filter_date):
     ds = filter_date.strip() or None
     try:
-        meals = run(get_meals(for_date=ds))
+        meals = await get_meals(for_date=ds)
     except Exception as e:
         return [], f'<div class="nm-error">Błąd: {e}</div>'
     rows = [
@@ -193,27 +191,26 @@ def handle_history(filter_date):
     count = len(meals)
     if count:
         label = f"dla {ds}" if ds else "łącznie"
-        status = f'<div class="nm-info">&#128203; Znaleziono {count} posiłków {label}</div>'
+        status = f'<div class="nm-info">📋 Znaleziono {count} posiłków {label}</div>'
     else:
         status = '<div class="nm-empty-inline">Brak posiłków dla podanej daty.</div>'
     return rows, status
 
 
-def load_dashboard():
+async def load_dashboard():
     today = date.today().isoformat()
-    return (
-        build_stats_html(run(get_daily_summary(for_date=today))),
-        build_recent_html(run(get_meals(for_date=today))),
-    )
+    summary = await get_daily_summary(for_date=today)
+    recent  = await get_meals(for_date=today)
+    return build_stats_html(summary), build_recent_html(recent)
 
 
-def go_dash():
-    s, r = load_dashboard()
+async def go_dash():
+    s, r = await load_dashboard()
     return gr.update(visible=True), gr.update(visible=False), s, r
 
 
-def go_hist():
-    rows, status = handle_history("")
+async def go_hist():
+    rows, status = await handle_history("")
     return gr.update(visible=False), gr.update(visible=True), rows, status
 
 
