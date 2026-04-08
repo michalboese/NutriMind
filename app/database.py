@@ -148,3 +148,20 @@ async def get_daily_summary(for_date: str | None = None) -> dict | None:
     target = for_date or date.today().isoformat()
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, partial(_get_daily_summary_sync, target))
+
+
+# ---------------------------------------------------------------------------
+# Delete
+# ---------------------------------------------------------------------------
+
+def _delete_meal_sync(meal_id: int) -> bool:
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute("DELETE FROM meals WHERE id = ?", (meal_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+async def delete_meal(meal_id: int) -> bool:
+    """Delete a meal by id. Returns True if a row was deleted."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, partial(_delete_meal_sync, meal_id))
