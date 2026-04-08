@@ -2,6 +2,19 @@
 
 Aplikacja do śledzenia kalorii z agentem AI. Opisz posiłek po polsku lub angielsku — agent (Ollama + llama3.2) automatycznie wyliczy kalorie i makroskładniki.
 
+## Dokumentacja
+
+| Dokument | Opis |
+|----------|------|
+| [AGENTS.md](AGENTS.md) | Instrukcje dla agentów AI pracujących z repozytorium |
+| [CHANGELOG.md](CHANGELOG.md) | Historia zmian (Keep a Changelog / SemVer) |
+| [docs/prd/PRD-001](docs/prd/PRD-001-nutrimind.md) | Product Requirements Document |
+| [docs/adr/ADR-001](docs/adr/ADR-001-sqlite-zamiast-orm.md) | Decyzja: SQLite przez stdlib zamiast ORM |
+| [docs/adr/ADR-002](docs/adr/ADR-002-httpx-async-ollama.md) | Decyzja: httpx async + exponential backoff |
+| [docs/adr/ADR-003](docs/adr/ADR-003-dwa-entry-pointy.md) | Decyzja: FastAPI i Gradio jako osobne entry pointy |
+| [docs/c4/](docs/c4/README.md) | Diagramy architektury C4 (Mermaid) |
+| [docs/api/](docs/api/openapi-summary.md) | Opis kontraktu REST API |
+
 ## Funkcje
 
 - Analiza posiłku z opisu w języku naturalnym (PL/EN)
@@ -116,6 +129,16 @@ Domyślne dzienne cele (edytowalne w UI → zakładka Ustawienia):
 | Tłuszcze | 70 g |
 
 Cele są zapisywane w pliku `settings.json` w katalogu projektu.
+
+## Architektura
+
+Projekt wykorzystuje trzy główne wzorce:
+
+- **Repository Pattern** — `app/database.py` enkapsuluje dostęp do SQLite, eksponując async funkcje (`save_meal`, `get_meals`, `get_daily_summary`, `delete_meal`)
+- **Strategy Pattern** — `app/agent.py` jest wymienialny — `analyze_meal()` komunikuje się z Ollama, ale interfejs (opis -> dict z makro) pozwala na podmianę LLM bez zmiany reszty kodu
+- **Async/Await** — FastAPI event loop + `httpx.AsyncClient` dla Ollama + `run_in_executor` dla synchronicznego SQLite
+
+Szczegóły decyzji architektonicznych: [docs/adr/](docs/adr/)
 
 ## Zmienne środowiskowe
 

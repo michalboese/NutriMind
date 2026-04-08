@@ -1,0 +1,25 @@
+C4Container
+    title NutriMind — Container Diagram
+
+    Person(user, "Użytkownik", "Śledzi kalorie przez UI")
+    Person_Ext(dev, "Deweloper", "Integruje przez REST API")
+
+    System_Boundary(nutrimind, "NutriMind") {
+        Container(gradio, "Gradio UI", "Python / Gradio", "3 zakładki: dodaj posiłek, historia, podsumowanie dnia. Port 7860")
+        Container(fastapi, "FastAPI Backend", "Python / FastAPI", "REST API z endpointami CRUD dla posiłków. Port 8000")
+        Container(agent, "Agent Module", "Python / httpx", "analyze_meal() — wysyła prompt do LLM, parsuje JSON, waliduje odpowiedź")
+        ContainerDb(db, "SQLite Database", "SQLite", "calorie_agent.db — tabela meals z historią posiłków")
+    }
+
+    System_Ext(ollama, "Ollama", "Lokalny serwer LLM z modelem llama3.2")
+
+    Rel(user, gradio, "Opisuje posiłki, przegląda dane", "HTTP / Browser")
+    Rel(dev, fastapi, "Wysyła requesty", "HTTP REST / JSON")
+
+    Rel(gradio, agent, "Wywołuje analyze_meal()", "Python import")
+    Rel(gradio, db, "Zapisuje i odczytuje posiłki", "Python import / sqlite3")
+
+    Rel(fastapi, agent, "Wywołuje analyze_meal()", "Python import")
+    Rel(fastapi, db, "Zapisuje i odczytuje posiłki", "Python import / sqlite3")
+
+    Rel(agent, ollama, "POST /api/chat z opisem posiłku", "httpx async / JSON")

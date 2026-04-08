@@ -1,0 +1,15 @@
+C4Context
+    title NutriMind — System Context Diagram
+
+    Person(user, "Użytkownik", "Śledzi kalorie i makroskładniki opisując posiłki w języku naturalnym")
+    Person_Ext(dev, "Deweloper / Integrator", "Korzysta z REST API do integracji z własnymi narzędziami")
+
+    System(nutrimind, "NutriMind", "Aplikacja do śledzenia kalorii z agentem AI — analizuje opisy posiłków i zwraca dane żywieniowe")
+
+    System_Ext(ollama, "Ollama", "Lokalny serwer LLM uruchamiający model llama3.2")
+    System_Ext(sqlite, "SQLite Database", "Plik calorie_agent.db przechowujący historię posiłków")
+
+    Rel(user, nutrimind, "Opisuje posiłki, przegląda historię", "Gradio UI / HTTP")
+    Rel(dev, nutrimind, "Wysyła requesty, pobiera dane", "REST API / JSON")
+    Rel(nutrimind, ollama, "Wysyła opisy posiłków, odbiera szacunki", "HTTP POST /api/chat")
+    Rel(nutrimind, sqlite, "Zapisuje i odczytuje posiłki", "sqlite3")
