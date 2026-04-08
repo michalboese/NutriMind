@@ -2,6 +2,15 @@
 
 Aplikacja do śledzenia kalorii z agentem AI. Opisz posiłek po polsku lub angielsku — agent (Ollama + llama3.2) automatycznie wyliczy kalorie i makroskładniki.
 
+## Funkcje
+
+- Analiza posiłku z opisu w języku naturalnym (PL/EN)
+- Dashboard z wykresami pierścieniowymi postępu dziennego
+- Edytowalne cele makroskładników (zapisywane w `settings.json`)
+- Historia posiłków w formie tabeli
+- Usuwanie posiłków
+- API REST (FastAPI) z dokumentacją Swagger
+
 ## Stack
 
 - **Backend:** FastAPI + SQLite
@@ -94,6 +103,19 @@ pytest tests/test_agent.py::test_analyze_meal_strips_markdown_fences  # jeden te
 ```
 
 Testy nie wymagają uruchomionej Ollamy — agent jest mockowany.
+
+## Cele makro
+
+Domyślne dzienne cele (edytowalne w UI → zakładka Ustawienia):
+
+| Makro | Domyślnie |
+|---|---|
+| Kalorie | 2000 kcal |
+| Białko | 150 g |
+| Węglowodany | 250 g |
+| Tłuszcze | 70 g |
+
+Cele są zapisywane w pliku `settings.json` w katalogu projektu.
 
 ## Zmienne środowiskowe
 
