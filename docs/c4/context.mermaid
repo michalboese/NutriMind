@@ -1,15 +1,24 @@
-C4Context
-    title NutriMind — System Context Diagram
+---
+title: "NutriMind — System Context Diagram"
+---
+flowchart TB
+    user["<b>Użytkownik</b><br/><i>Śledzi kalorie opisując<br/>posiłki w języku naturalnym</i>"]
+    dev["<b>Deweloper / Integrator</b><br/><i>Korzysta z REST API<br/>do integracji</i>"]
 
-    Person(user, "Użytkownik", "Śledzi kalorie i makroskładniki opisując posiłki w języku naturalnym")
-    Person_Ext(dev, "Deweloper / Integrator", "Korzysta z REST API do integracji z własnymi narzędziami")
+    nutrimind["<b>NutriMind</b><br/><i>Aplikacja do śledzenia kalorii<br/>z agentem AI</i>"]
 
-    System(nutrimind, "NutriMind", "Aplikacja do śledzenia kalorii z agentem AI — analizuje opisy posiłków i zwraca dane żywieniowe")
+    ollama[("<b>Ollama</b><br/><i>Lokalny serwer LLM<br/>llama3.2</i>")]
+    sqlite[("<b>SQLite</b><br/><i>calorie_agent.db</i>")]
 
-    System_Ext(ollama, "Ollama", "Lokalny serwer LLM uruchamiający model llama3.2")
-    System_Ext(sqlite, "SQLite Database", "Plik calorie_agent.db przechowujący historię posiłków")
+    user -- "Gradio UI / HTTP" --> nutrimind
+    dev -- "REST API / JSON" --> nutrimind
+    nutrimind -- "HTTP POST /api/chat" --> ollama
+    nutrimind -- "sqlite3" --> sqlite
 
-    Rel(user, nutrimind, "Opisuje posiłki, przegląda historię", "Gradio UI / HTTP")
-    Rel(dev, nutrimind, "Wysyła requesty, pobiera dane", "REST API / JSON")
-    Rel(nutrimind, ollama, "Wysyła opisy posiłków, odbiera szacunki", "HTTP POST /api/chat")
-    Rel(nutrimind, sqlite, "Zapisuje i odczytuje posiłki", "sqlite3")
+    classDef person fill:#08427b,color:#fff,stroke:#073b6f
+    classDef system fill:#1168bd,color:#fff,stroke:#0e5aa7
+    classDef external fill:#999,color:#fff,stroke:#777
+
+    class user,dev person
+    class nutrimind system
+    class ollama,sqlite external

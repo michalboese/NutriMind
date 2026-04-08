@@ -7,6 +7,10 @@ wersjonowanie zgodne z [Semantic Versioning](https://semver.org/lang/pl/).
 
 ## [Unreleased]
 
+### Changed
+
+- Przepisano diagramy C4 z `C4Context`/`C4Container` na standardowy `flowchart TB` Mermaid — poprawiona czytelność i kompatybilność z GitHubem
+
 ### Added
 
 ## [0.1.0] - 2026-04-08

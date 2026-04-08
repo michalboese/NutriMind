@@ -20,14 +20,20 @@ W tym projekcie utrzymujemy diagramy na poziomie **Context** i **Container** —
 
 ## Jak czytać
 
-Diagramy są w formacie **Mermaid** — renderują się automatycznie na GitHubie, w VS Code (z rozszerzeniem Mermaid), lub na [mermaid.live](https://mermaid.live).
+Diagramy są w formacie **Mermaid** (`flowchart TB`) — renderują się automatycznie na GitHubie, w VS Code (z rozszerzeniem Mermaid), lub na [mermaid.live](https://mermaid.live).
 
-### Konwencje
+### Konwencje kolorów
 
-- **Niebieskie prostokąty** — wewnętrzne kontenery NutriMind
-- **Szare prostokąty** — systemy zewnętrzne (Ollama, SQLite)
-- **Strzałki** — kierunek komunikacji z opisem protokołu
-- **Person** — aktor ludzki (użytkownik, deweloper)
+| Kolor | Znaczenie |
+|-------|-----------|
+| Ciemnoniebieski (`#08427b`) | Aktor (użytkownik, deweloper) |
+| Niebieski (`#1168bd`) | Wewnętrzny kontener NutriMind |
+| Szary (`#999`) | System zewnętrzny (Ollama, SQLite) |
+
+### Konwencje strzałek
+
+- **Linia ciągła** (`-->`) — komunikacja sieciowa (HTTP, sqlite3)
+- **Linia przerywana** (`-.->`) — import Pythonowy (w ramach jednego procesu)
 
 ## Kiedy aktualizować
 

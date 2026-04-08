@@ -1,25 +1,38 @@
-C4Container
-    title NutriMind — Container Diagram
+---
+title: "NutriMind — Container Diagram"
+---
+flowchart TB
+    user["<b>Użytkownik</b><br/><i>Przeglądarka</i>"]
+    dev["<b>Deweloper</b><br/><i>HTTP client</i>"]
 
-    Person(user, "Użytkownik", "Śledzi kalorie przez UI")
-    Person_Ext(dev, "Deweloper", "Integruje przez REST API")
+    subgraph nutrimind ["NutriMind"]
+        gradio["<b>Gradio UI</b><br/><i>Python / Gradio</i><br/>Port 7860"]
+        fastapi["<b>FastAPI Backend</b><br/><i>Python / FastAPI</i><br/>Port 8000"]
+        agent["<b>Agent Module</b><br/><i>Python / httpx</i><br/>analyze_meal()"]
+        db[("<b>SQLite Database</b><br/><i>calorie_agent.db</i><br/>tabela meals")]
+    end
 
-    System_Boundary(nutrimind, "NutriMind") {
-        Container(gradio, "Gradio UI", "Python / Gradio", "3 zakładki: dodaj posiłek, historia, podsumowanie dnia. Port 7860")
-        Container(fastapi, "FastAPI Backend", "Python / FastAPI", "REST API z endpointami CRUD dla posiłków. Port 8000")
-        Container(agent, "Agent Module", "Python / httpx", "analyze_meal() — wysyła prompt do LLM, parsuje JSON, waliduje odpowiedź")
-        ContainerDb(db, "SQLite Database", "SQLite", "calorie_agent.db — tabela meals z historią posiłków")
-    }
+    ollama[("<b>Ollama</b><br/><i>Lokalny LLM</i><br/>llama3.2")]
 
-    System_Ext(ollama, "Ollama", "Lokalny serwer LLM z modelem llama3.2")
+    user -- "HTTP / Browser" --> gradio
+    dev -- "HTTP REST / JSON" --> fastapi
 
-    Rel(user, gradio, "Opisuje posiłki, przegląda dane", "HTTP / Browser")
-    Rel(dev, fastapi, "Wysyła requesty", "HTTP REST / JSON")
+    gradio -. "Python import" .-> agent
+    gradio -. "Python import / sqlite3" .-> db
 
-    Rel(gradio, agent, "Wywołuje analyze_meal()", "Python import")
-    Rel(gradio, db, "Zapisuje i odczytuje posiłki", "Python import / sqlite3")
+    fastapi -. "Python import" .-> agent
+    fastapi -. "Python import / sqlite3" .-> db
 
-    Rel(fastapi, agent, "Wywołuje analyze_meal()", "Python import")
-    Rel(fastapi, db, "Zapisuje i odczytuje posiłki", "Python import / sqlite3")
+    agent -- "httpx async<br/>POST /api/chat" --> ollama
 
-    Rel(agent, ollama, "POST /api/chat z opisem posiłku", "httpx async / JSON")
+    classDef person fill:#08427b,color:#fff,stroke:#073b6f
+    classDef container fill:#1168bd,color:#fff,stroke:#0e5aa7
+    classDef database fill:#1168bd,color:#fff,stroke:#0e5aa7
+    classDef external fill:#999,color:#fff,stroke:#777
+    classDef boundary fill:none,stroke:#444,stroke-dasharray:5 5,color:#444
+
+    class user,dev person
+    class gradio,fastapi,agent container
+    class db database
+    class ollama external
+    class nutrimind boundary
