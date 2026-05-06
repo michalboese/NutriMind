@@ -25,7 +25,7 @@ pytest tests/test_api.py::test_create_meal_success
 
 Ollama must be running locally for end-to-end usage:
 ```bash
-ollama run llama3.2
+ollama run qwen2.5:14b
 ```
 
 ## Architecture
@@ -48,7 +48,7 @@ The UI and the API are **two separate entry points** that share the same `app/` 
 
 ### Key design decisions
 
-- **`app/agent.py`** — sends meal description to `POST /api/chat` on Ollama (`llama3.2`). System prompt enforces JSON-only output. A regex strips markdown code fences in case the model wraps the JSON anyway.
+- **`app/agent.py`** — sends meal description to `POST /api/chat` on Ollama (default `qwen2.5:14b`, configurable via `OLLAMA_MODEL`). Calls Ollama with `format: "json"` and `temperature: 0.2` for deterministic JSON output. System prompt enforces strict language preservation (PL/EN, no translation, no dropped ingredients) and exact-weight handling. A regex still strips markdown fences as a defensive fallback.
 - **`app/database.py`** — uses stdlib `sqlite3` wrapped in `asyncio.run_in_executor` to avoid blocking FastAPI's event loop. DB file is `calorie_agent.db` in the project root (gitignored).
 - **`app/models.py`** — three Pydantic v2 models: `MealRequest` (input), `MealRecord` (full DB row), `DailySummary` (aggregated totals).
 - **`pytest.ini`** sets `asyncio_mode = auto` so async tests don't need `@pytest.mark.asyncio`. Tests patch `DB_PATH` via `unittest.mock.patch` to isolate each test in a `tmp_path` SQLite file.

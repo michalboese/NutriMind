@@ -5,10 +5,11 @@ import re
 import httpx
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/chat")
-MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
+MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 OLLAMA_RETRIES = int(os.environ.get("OLLAMA_RETRIES", "3"))
 OLLAMA_RETRY_DELAY = float(os.environ.get("OLLAMA_RETRY_DELAY", "1.0"))
-OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "60.0"))
+OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "120.0"))
+OLLAMA_TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0.2"))
 
 SYSTEM_PROMPT = """\
 You are a precise nutrition analysis assistant. Analyze meal descriptions and return accurate nutritional data.
@@ -54,6 +55,8 @@ async def analyze_meal(description: str) -> dict:
     payload = {
         "model": MODEL,
         "stream": False,
+        "format": "json",
+        "options": {"temperature": OLLAMA_TEMPERATURE},
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": description},

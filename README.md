@@ -1,6 +1,6 @@
 # Calorie Agent
 
-Aplikacja do śledzenia kalorii z agentem AI. Opisz posiłek po polsku lub angielsku — agent (Ollama + llama3.2) automatycznie wyliczy kalorie i makroskładniki.
+Aplikacja do śledzenia kalorii z agentem AI. Opisz posiłek po polsku lub angielsku — agent (Ollama + qwen2.5:14b) automatycznie wyliczy kalorie i makroskładniki.
 
 ## Dokumentacja
 
@@ -28,12 +28,12 @@ Aplikacja do śledzenia kalorii z agentem AI. Opisz posiłek po polsku lub angie
 
 - **Backend:** FastAPI + SQLite
 - **UI:** Gradio
-- **AI:** Ollama (llama3.2)
+- **AI:** Ollama (qwen2.5:14b — wielojęzyczny, wymuszony JSON)
 
 ## Wymagania
 
 - Python 3.10+
-- [Ollama](https://ollama.com) zainstalowane lokalnie z modelem `llama3.2`
+- [Ollama](https://ollama.com) zainstalowane lokalnie z modelem `qwen2.5:14b` (~9 GB; model konfigurowalny przez `OLLAMA_MODEL`)
 
 ## Instalacja
 
@@ -51,7 +51,7 @@ source venv/Scripts/activate      # Windows
 pip install -r requirements.txt
 
 # 4. Pobierz model AI
-ollama pull llama3.2
+ollama pull qwen2.5:14b
 ```
 
 ## Uruchomienie
@@ -62,7 +62,7 @@ UI komunikuje się bezpośrednio z bazą i agentem, FastAPI nie jest potrzebny.
 
 ```bash
 # Terminal 1 — Ollama
-ollama run llama3.2
+ollama run qwen2.5:14b
 
 # Terminal 2 — UI
 source venv/Scripts/activate
@@ -77,7 +77,7 @@ Otwórz **http://localhost:7860**
 
 ```bash
 # Terminal 1 — Ollama
-ollama run llama3.2
+ollama run qwen2.5:14b
 
 # Terminal 2 — backend API
 source venv/Scripts/activate
@@ -146,8 +146,9 @@ Opcjonalna konfiguracja agenta (domyślne wartości poniżej):
 
 ```bash
 OLLAMA_URL=http://localhost:11434/api/chat
-OLLAMA_MODEL=llama3.2
-OLLAMA_TIMEOUT=60.0
+OLLAMA_MODEL=qwen2.5:14b
+OLLAMA_TIMEOUT=120.0
+OLLAMA_TEMPERATURE=0.2
 OLLAMA_RETRIES=3
 OLLAMA_RETRY_DELAY=1.0
 ```
