@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncio
+import functools
 import json
 from datetime import date
 
@@ -44,11 +45,12 @@ def _meal_count_label(n):
     return f"{n} posi\u0142k\u00f3w"
 
 
-def _meal_choices(meals):
-    return [
-        (f"{m['meal_name']}  \u2014  {m['calories']} kcal  ({m['created_at'][11:16]})", str(m['id']))
-        for m in meals
-    ]
+def _history_status_html(meals, ds):
+    n = len(meals)
+    if not n:
+        return ""
+    label = f"dla {ds}" if ds else "\u0142\u0105cznie"
+    return f'<div class="nm-info">\U0001F4CB Znaleziono {n} posi\u0142k\u00f3w {label}</div>'
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +121,9 @@ def build_stats_html(summary, goals=None):
     )
 
 
-def build_recent_html(meals):
-    if not meals:
-        return '<div class="nm-empty">Brak posi\u0142k\u00f3w dzisiaj \u2014 dodaj pierwszy posi\u0142ek obok \u27a1</div>'
-    rows = "".join(
-        f'<div class="nm-row">'
+def _meal_row_inner_html(m):
+    return (
+        f'<div class="nm-row-content">'
         f'<div class="nm-row-left">'
         f'<div class="nm-row-name">{m["meal_name"]}</div>'
         f'<div class="nm-row-time">{m["created_at"][11:16]}</div>'
@@ -133,43 +133,27 @@ def build_recent_html(meals):
         f'<span class="nm-pill nm-p-pro">B {m["protein"]:.0f}g</span>'
         f'<span class="nm-pill nm-p-carb">W {m["carbs"]:.0f}g</span>'
         f'<span class="nm-pill nm-p-fat">T {m["fat"]:.0f}g</span>'
-        f'</div></div>'
-        for m in meals
+        f'</div>'
+        f'</div>'
     )
-    return f'<div class="nm-meal-list">{rows}</div>'
 
 
-def build_history_html(meals):
-    if not meals:
-        return '<div class="nm-empty">Brak posi\u0142k\u00f3w.</div>'
-    rows = ""
-    for m in meals:
-        desc = m["description"][:60] + ("\u2026" if len(m["description"]) > 60 else "")
-        rows += (
-            f'<tr>'
-            f'<td class="nm-td">{m["created_at"][:16].replace("T", " ")}</td>'
-            f'<td class="nm-td nm-td-name">{m["meal_name"]}</td>'
-            f'<td class="nm-td nm-td-desc">{desc}</td>'
-            f'<td class="nm-td nm-td-r">{m["calories"]}</td>'
-            f'<td class="nm-td nm-td-r">{m["protein"]:.1f}</td>'
-            f'<td class="nm-td nm-td-r">{m["carbs"]:.1f}</td>'
-            f'<td class="nm-td nm-td-r">{m["fat"]:.1f}</td>'
-            f'</tr>'
-        )
+def _history_row_inner_html(m):
+    desc = m["description"][:60] + ("\u2026" if len(m["description"]) > 60 else "")
+    when = m["created_at"][:16].replace("T", " ")
     return (
-        '<div class="nm-table-wrap">'
-        '<table class="nm-table">'
-        '<thead><tr>'
-        '<th class="nm-th">Data</th>'
-        '<th class="nm-th">Posi\u0142ek</th>'
-        '<th class="nm-th">Opis</th>'
-        '<th class="nm-th nm-th-r">kcal</th>'
-        '<th class="nm-th nm-th-r">Bia\u0142ko</th>'
-        '<th class="nm-th nm-th-r">W\u0119gle</th>'
-        '<th class="nm-th nm-th-r">T\u0142uszcze</th>'
-        '</tr></thead>'
-        f'<tbody>{rows}</tbody>'
-        '</table></div>'
+        f'<div class="nm-row-content">'
+        f'<div class="nm-row-left">'
+        f'<div class="nm-row-name">{m["meal_name"]}</div>'
+        f'<div class="nm-row-time">{when} \u00b7 {desc}</div>'
+        f'</div>'
+        f'<div class="nm-row-pills">'
+        f'<span class="nm-pill nm-p-cal">{m["calories"]} kcal</span>'
+        f'<span class="nm-pill nm-p-pro">B {m["protein"]:.0f}g</span>'
+        f'<span class="nm-pill nm-p-carb">W {m["carbs"]:.0f}g</span>'
+        f'<span class="nm-pill nm-p-fat">T {m["fat"]:.0f}g</span>'
+        f'</div>'
+        f'</div>'
     )
 
 
@@ -190,13 +174,15 @@ def build_result_html(a):
 # Event handlers
 # ---------------------------------------------------------------------------
 
-async def handle_analyze(description):
+async def handle_analyze(description, current_meals):
     desc = description.strip()
     if not desc:
         return (
             gr.update(value='<div class="nm-err">\u26a0\ufe0f Wprowad\u017a opis posi\u0142ku.</div>', visible=True),
             gr.update(visible=False),
-            gr.update(), gr.update(), gr.update(), gr.update(value=""),
+            gr.update(),
+            current_meals,
+            gr.update(value=""),
         )
     try:
         analysis = await analyze_meal(desc)
@@ -205,7 +191,9 @@ async def handle_analyze(description):
         return (
             gr.update(value=f'<div class="nm-err">\u26a0\ufe0f B\u0142\u0105d: {e}</div>', visible=True),
             gr.update(visible=False),
-            gr.update(), gr.update(), gr.update(), gr.update(),
+            gr.update(),
+            current_meals,
+            gr.update(),
         )
     goals = load_goals()
     today = date.today().isoformat()
@@ -215,8 +203,7 @@ async def handle_analyze(description):
         gr.update(value="", visible=False),
         gr.update(value=build_result_html(analysis), visible=True),
         gr.update(value=build_stats_html(summary, goals)),
-        gr.update(value=build_recent_html(recent)),
-        gr.update(choices=_meal_choices(recent), value=None),
+        recent,
         gr.update(value=""),
     )
 
@@ -227,20 +214,12 @@ async def handle_history(filter_date):
         meals = await get_meals(for_date=ds or None)
     except Exception as e:
         return (
+            [],
             f'<div class="nm-err">B\u0142\u0105d: {e}</div>',
-            "",
-            gr.update(choices=[], value=None),
         )
-    n = len(meals)
-    if n:
-        label = f"dla {ds}" if ds else "\u0142\u0105cznie"
-        status = f'<div class="nm-info">\U0001F4CB Znaleziono {n} posi\u0142k\u00f3w {label}</div>'
-    else:
-        status = ""
     return (
-        build_history_html(meals),
-        status,
-        gr.update(choices=_meal_choices(meals), value=None),
+        meals,
+        _history_status_html(meals, ds),
     )
 
 
@@ -251,24 +230,23 @@ async def load_dashboard():
     recent = await get_meals(for_date=today)
     return (
         build_stats_html(summary, goals),
-        build_recent_html(recent),
-        gr.update(choices=_meal_choices(recent), value=None),
+        recent,
     )
 
 
 async def go_dash():
-    stats, recent, dd = await load_dashboard()
+    stats, recent = await load_dashboard()
     return (
         gr.update(visible=True), gr.update(visible=False), gr.update(visible=False),
-        stats, recent, dd,
+        stats, recent,
     )
 
 
 async def go_hist():
-    html, status, dd = await handle_history("")
+    meals, status = await handle_history("")
     return (
         gr.update(visible=False), gr.update(visible=True), gr.update(visible=False),
-        html, status, dd,
+        meals, status,
     )
 
 
@@ -280,48 +258,31 @@ async def go_settings():
     )
 
 
-async def handle_delete_dash(selected):
-    if not selected:
-        return (
-            gr.update(), gr.update(), gr.update(),
-            '<span class="nm-del-msg">Wybierz posi\u0142ek z listy.</span>',
-        )
-    mid = int(selected)
-    deleted = await delete_meal(mid)
-    if not deleted:
-        return (
-            gr.update(), gr.update(), gr.update(),
-            '<span class="nm-del-msg nm-del-err">Nie znaleziono posi\u0142ku.</span>',
-        )
+async def handle_delete_meal(mid):
+    await delete_meal(mid)
     goals = load_goals()
     today = date.today().isoformat()
     summary = await get_daily_summary(for_date=today)
     recent = await get_meals(for_date=today)
     return (
-        gr.update(value=build_stats_html(summary, goals)),
-        gr.update(value=build_recent_html(recent)),
-        gr.update(choices=_meal_choices(recent), value=None),
-        '<span class="nm-del-msg nm-del-ok">\u2713 Usuni\u0119to posi\u0142ek.</span>',
+        build_stats_html(summary, goals),
+        recent,
     )
 
 
-async def handle_delete_hist(selected, hist_date):
-    if not selected:
-        return (
-            gr.update(), gr.update(), gr.update(),
-            '<span class="nm-del-msg">Wybierz posi\u0142ek z listy.</span>',
-        )
-    mid = int(selected)
-    deleted = await delete_meal(mid)
-    if not deleted:
-        return (
-            gr.update(), gr.update(), gr.update(),
-            '<span class="nm-del-msg nm-del-err">Nie znaleziono posi\u0142ku.</span>',
-        )
-    html, status, dd = await handle_history(hist_date or "")
+async def handle_delete_history(mid, filter_date):
+    await delete_meal(mid)
+    ds = filter_date.strip() if filter_date else None
+    meals = await get_meals(for_date=ds or None)
+    today = date.today().isoformat()
+    today_meals = await get_meals(for_date=today)
+    summary = await get_daily_summary(for_date=today)
+    goals = load_goals()
     return (
-        html, status, dd,
-        '<span class="nm-del-msg nm-del-ok">\u2713 Usuni\u0119to posi\u0142ek.</span>',
+        meals,
+        _history_status_html(meals, ds),
+        today_meals,
+        build_stats_html(summary, goals),
     )
 
 
@@ -341,191 +302,473 @@ async def handle_save_goals(cal, pro, carb, fat):
 # ---------------------------------------------------------------------------
 
 CSS = """
+/* ─────────────────────────────────────────────────────────────
+   Theme tokens — single source of truth for all colors.
+   ───────────────────────────────────────────────────────────── */
 :root {
-    --bg: #0d1117; --surf: #161b22; --card: #1c2333; --brd: #30363d;
-    --acc: #3fb950; --acc2: #56d364; --txt: #e6edf3; --mut: #8b949e;
-    --cal: #f97316; --pro: #3fb950; --carb: #58a6ff; --fat: #f0c24b;
-    --r: 12px; --rs: 8px;
+    --bg:   #0d1117;
+    --surf: #161b22;
+    --card: #161b22;
+    --elev: #1c2230;
+    --brd:  #30363d;
+    --hover: rgba(255,255,255,.05);
+    --row-hover: rgba(255,255,255,.025);
+
+    --txt: #e6edf3;
+    --mut: #8b949e;
+
+    --acc:  #3fb950;
+    --acc2: #56d364;
+    --cal:  #f97316;
+    --pro:  #3fb950;
+    --carb: #58a6ff;
+    --fat:  #f0c24b;
+    --err:  #ff7b72;
+
+    --cal-bg:  rgba(249,115,22,.14);
+    --pro-bg:  rgba(63,185,80,.14);
+    --carb-bg: rgba(88,166,255,.14);
+    --fat-bg:  rgba(240,194,75,.14);
+    --acc-bg:  rgba(63,185,80,.10);
+    --acc-ring:rgba(63,185,80,.18);
+    --err-bg:  rgba(248,81,73,.10);
+    --err-brd: rgba(248,81,73,.28);
+    --info-bg: rgba(88,166,255,.08);
+    --info-brd:rgba(88,166,255,.22);
+
+    --r:  12px;
+    --rs: 8px;
 }
+
 :root.nm-light {
-    --bg: #f6f8fa; --surf: #ffffff; --card: #ffffff; --brd: #d0d7de;
-    --acc: #1a7f37; --acc2: #2da44e; --txt: #1f2328; --mut: #656d76;
+    --bg:   #f6f8fa;
+    --surf: #ffffff;
+    --card: #ffffff;
+    --elev: #f3f4f6;
+    --brd:  #d0d7de;
+    --hover: rgba(0,0,0,.06);
+    --row-hover: rgba(0,0,0,.03);
+
+    --txt: #1f2328;
+    --mut: #4b5563;
+
+    --acc:  #1a7f37;
+    --acc2: #2da44e;
+    --cal:  #b45309;
+    --pro:  #1a7f37;
+    --carb: #0552a0;
+    --fat:  #92670a;
+    --err:  #b91c1c;
+
+    --cal-bg:  rgba(180,83,9,.12);
+    --pro-bg:  rgba(26,127,55,.12);
+    --carb-bg: rgba(5,82,160,.12);
+    --fat-bg:  rgba(146,103,10,.14);
+    --acc-bg:  rgba(26,127,55,.10);
+    --acc-ring:rgba(26,127,55,.20);
+    --err-bg:  rgba(185,28,28,.10);
+    --err-brd: rgba(185,28,28,.28);
+    --info-bg: rgba(5,82,160,.08);
+    --info-brd:rgba(5,82,160,.24);
 }
 
-/* Base */
-.gradio-container { background: var(--bg) !important; max-width: 100% !important; padding: 0 !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important; }
-footer { display: none !important; }
-.app { background: var(--bg) !important; }
+/* Override Gradio's internal theme variables so all built-in
+   widgets inherit our palette automatically. */
+:root, :root.nm-light {
+    --body-background-fill: var(--bg);
+    --background-fill-primary: var(--bg);
+    --background-fill-secondary: var(--surf);
+    --block-background-fill: transparent;
+    --block-border-color: transparent;
+    --block-border-width: 0;
+    --panel-background-fill: transparent;
+    --block-label-background-fill: transparent;
+    --block-label-text-color: var(--mut);
+    --block-title-text-color: var(--mut);
+    --block-info-text-color: var(--mut);
+    --input-background-fill: var(--surf);
+    --input-background-fill-focus: var(--surf);
+    --input-border-color: var(--brd);
+    --input-border-color-focus: var(--acc);
+    --input-text-size: 13px;
+    --body-text-color: var(--txt);
+    --body-text-color-subdued: var(--mut);
+    --color-accent: var(--acc);
+    --color-accent-soft: var(--acc-bg);
+    --border-color-primary: var(--brd);
+    --border-color-accent: var(--acc);
+    --button-secondary-background-fill: var(--surf);
+    --button-secondary-background-fill-hover: var(--elev);
+    --button-secondary-text-color: var(--txt);
+    --button-secondary-border-color: var(--brd);
+    --neutral-50:  var(--surf);
+    --neutral-100: var(--surf);
+    --neutral-200: var(--brd);
+    --shadow-drop: none;
+    --shadow-drop-lg: none;
+}
 
-/* Sidebar */
-aside, [class*="sidebar"] { background: var(--surf) !important; border-right: 1px solid var(--brd) !important; }
+/* ─────────────────────────────────────────────────────────────
+   Base layout — flatten Gradio wrappers, set one bg.
+   ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--txt); }
+
+.gradio-container,
+.gradio-container > .main,
+.gradio-container .contain,
+.app {
+    background: var(--bg) !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    color: var(--txt) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", sans-serif !important;
+}
+footer { display: none !important; }
+
+/* Reset every Gradio block/form/wrap so they don't paint extra layers */
+.gradio-container .block,
+.gradio-container .form,
+.gradio-container .wrap,
+.gradio-container .panel,
+.gradio-container [class*="block-"],
+.gradio-container .gap {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Sidebar
+   ───────────────────────────────────────────────────────────── */
+aside, [class*="sidebar"] {
+    background: var(--surf) !important;
+    border-right: 1px solid var(--brd) !important;
+}
 .nm-brand { padding: 18px 16px 14px; border-bottom: 1px solid var(--brd); }
-.nm-brand-name { font-size: 20px; font-weight: 800;
-    background: linear-gradient(135deg, var(--acc), var(--carb));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; letter-spacing: -0.3px; }
-.nm-brand-tag { font-size: 11px; color: var(--mut); margin-top: 3px; }
+.nm-brand-row { display: flex; align-items: center; gap: 10px; }
+.nm-brand-logo {
+    flex-shrink: 0; border-radius: 10px;
+    box-shadow: 0 2px 8px var(--acc-ring); display: block;
+}
+.nm-brand-name {
+    font-size: 18px; font-weight: 800; letter-spacing: -.3px;
+    color: var(--acc); line-height: 1.1; white-space: nowrap;
+}
+.nm-brand-tag {
+    font-size: 11px; color: var(--mut); margin-top: 8px;
+    line-height: 1.3; word-wrap: break-word;
+}
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+    .nm-brand-name {
+        background-image: linear-gradient(135deg, var(--acc) 0%, var(--carb) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+}
+
 .nm-nav { padding: 10px 8px !important; gap: 2px !important; }
-.nm-nav button { width: 100% !important; text-align: left !important; background: transparent !important;
-    border: none !important; border-left: 3px solid transparent !important;
-    border-radius: 0 var(--rs) var(--rs) 0 !important; color: var(--mut) !important;
-    font-size: 13px !important; font-weight: 500 !important; padding: 9px 12px !important;
-    margin: 0 !important; box-shadow: none !important; transition: all .15s !important;
-    cursor: pointer !important; justify-content: flex-start !important; }
-.nm-nav button:hover { background: rgba(255,255,255,.04) !important; color: var(--txt) !important; }
-.nm-nav-active button { background: rgba(63,185,80,.1) !important; color: var(--acc) !important;
-    border-left-color: var(--acc) !important; font-weight: 600 !important; }
-.nm-theme-wrap { border-top: 1px solid var(--brd); padding-top: 10px; margin-top: 6px; }
-.nm-theme-wrap button { width: 100% !important; background: transparent !important;
+.nm-nav button {
+    width: 100% !important; text-align: left !important;
+    background: transparent !important; border: none !important;
+    border-left: 3px solid transparent !important;
+    border-radius: 0 var(--rs) var(--rs) 0 !important;
+    color: var(--mut) !important;
+    font-size: 13px !important; font-weight: 500 !important;
+    padding: 9px 12px !important; margin: 0 !important;
+    box-shadow: none !important;
+    transition: background .15s, color .15s, border-color .15s !important;
+    cursor: pointer !important; justify-content: flex-start !important;
+}
+.nm-nav button:hover { background: var(--hover) !important; color: var(--txt) !important; }
+.nm-nav-active button {
+    background: var(--acc-bg) !important; color: var(--acc) !important;
+    border-left-color: var(--acc) !important; font-weight: 600 !important;
+}
+
+.nm-theme-wrap { border-top: 1px solid var(--brd); padding: 10px 8px 12px; margin-top: 6px; }
+.nm-theme-wrap button {
+    width: 100% !important; background: transparent !important;
     border: 1px solid var(--brd) !important; border-radius: var(--rs) !important;
     color: var(--mut) !important; font-size: 12px !important; padding: 7px !important;
-    box-shadow: none !important; transition: all .15s !important; cursor: pointer !important; }
-.nm-theme-wrap button:hover { border-color: var(--acc) !important; color: var(--acc) !important; }
+    box-shadow: none !important;
+    transition: border-color .15s, color .15s, background .15s !important;
+    cursor: pointer !important;
+}
+.nm-theme-wrap button:hover {
+    border-color: var(--acc) !important; color: var(--acc) !important;
+    background: var(--acc-bg) !important;
+}
 
-/* Main */
-.nm-main { padding: 18px 24px !important; background: var(--bg) !important; }
-.nm-header { margin-bottom: 14px; }
-.nm-title { font-size: 21px; font-weight: 700; color: var(--txt); line-height: 1; }
+/* ─────────────────────────────────────────────────────────────
+   Main area
+   ───────────────────────────────────────────────────────────── */
+.nm-main {
+    padding: 20px 24px 28px !important;
+    background: var(--bg) !important;
+    min-height: 100vh;
+}
+.nm-header { margin-bottom: 16px; }
+.nm-title { font-size: 22px; font-weight: 700; color: var(--txt); line-height: 1.1;
+    letter-spacing: -.3px; }
 .nm-sub { font-size: 12px; color: var(--mut); margin-top: 4px; }
 
-/* Stats */
-.nm-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
-@media(max-width:960px) { .nm-stats { grid-template-columns: repeat(2,1fr); } }
-.nm-card { background: var(--card); border: 1px solid var(--brd); border-radius: var(--r);
-    padding: 12px 14px; position: relative; overflow: hidden; }
+/* ─────────────────────────────────────────────────────────────
+   Stats cards
+   ───────────────────────────────────────────────────────────── */
+.nm-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 14px; margin-bottom: 14px;
+}
+.nm-card {
+    background: var(--card); border: 1px solid var(--brd);
+    border-radius: var(--r); padding: 14px 16px;
+    position: relative; overflow: hidden;
+    transition: border-color .15s, transform .15s;
+}
+.nm-card:hover { border-color: var(--mut); }
 .nm-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
-.nm-card-cal::before { background: var(--cal); }
-.nm-card-pro::before { background: var(--pro); }
+.nm-card-cal::before  { background: var(--cal); }
+.nm-card-pro::before  { background: var(--pro); }
 .nm-card-carb::before { background: var(--carb); }
-.nm-card-fat::before { background: var(--fat); }
-.nm-card-top { font-size: 10px; font-weight: 600; color: var(--mut);
-    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
-.nm-card-body { display: flex; align-items: center; gap: 10px; }
+.nm-card-fat::before  { background: var(--fat); }
+.nm-card-top {
+    font-size: 10px; font-weight: 600; color: var(--mut);
+    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px;
+}
+.nm-card-body { display: flex; align-items: center; gap: 12px; }
 .nm-card-val { font-size: 22px; font-weight: 700; color: var(--txt); line-height: 1; }
 .nm-unit { font-size: 12px; font-weight: 400; color: var(--mut); }
-.nm-card-goal { font-size: 10px; color: var(--mut); margin-top: 3px; }
+.nm-card-goal { font-size: 10px; color: var(--mut); margin-top: 4px; }
 
-/* Sections */
-.nm-section { background: var(--card) !important; border: 1px solid var(--brd) !important;
-    border-radius: var(--r) !important; padding: 14px 16px !important; }
-.nm-section-title { font-size: 11px; font-weight: 600; color: var(--mut);
-    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+/* ─────────────────────────────────────────────────────────────
+   Sections (panels)
+   ───────────────────────────────────────────────────────────── */
+.nm-section {
+    background: var(--card) !important;
+    border: 1px solid var(--brd) !important;
+    border-radius: var(--r) !important;
+    padding: 16px !important;
+}
+.nm-section-title {
+    font-size: 11px; font-weight: 600; color: var(--mut);
+    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px;
+}
 
-/* Form inputs */
-.nm-section textarea, .nm-section input[type="text"], .nm-section input[type="number"] {
-    background: var(--surf) !important; border: 1px solid var(--brd) !important;
-    border-radius: var(--rs) !important; color: var(--txt) !important;
-    font-size: 13px !important; transition: border-color .15s, box-shadow .15s !important; }
-.nm-section textarea:focus, .nm-section input:focus {
-    border-color: var(--acc) !important; box-shadow: 0 0 0 3px rgba(63,185,80,.12) !important;
-    outline: none !important; }
-.nm-section label, .nm-section .label-wrap span {
-    color: var(--mut) !important; font-size: 11px !important; font-weight: 500 !important; }
-.nm-section .wrap, .nm-section .block { background: transparent !important; border: none !important; }
+/* ─────────────────────────────────────────────────────────────
+   Form inputs — defeat the browser-default greys & UA text colors.
+   ───────────────────────────────────────────────────────────── */
+.gradio-container input[type="text"],
+.gradio-container input[type="number"],
+.gradio-container input[type="search"],
+.gradio-container textarea,
+.gradio-container select {
+    background: var(--surf) !important;
+    background-color: var(--surf) !important;
+    border: 1px solid var(--brd) !important;
+    border-radius: var(--rs) !important;
+    color: var(--txt) !important;
+    -webkit-text-fill-color: var(--txt) !important;
+    font-size: 13px !important;
+    transition: border-color .15s, box-shadow .15s !important;
+    color-scheme: inherit;
+}
+.gradio-container input:focus,
+.gradio-container textarea:focus,
+.gradio-container select:focus {
+    border-color: var(--acc) !important;
+    box-shadow: 0 0 0 3px var(--acc-ring) !important;
+    outline: none !important;
+}
+.gradio-container input::placeholder,
+.gradio-container textarea::placeholder {
+    color: var(--mut) !important;
+    -webkit-text-fill-color: var(--mut) !important;
+    opacity: 1 !important;
+}
 
-/* Dashboard row */
-.nm-dash-row { gap: 12px !important; align-items: flex-start !important; }
-.nm-dash-row > div { min-width: 0; }
+/* Labels — force full text color so they're always legible. */
+.gradio-container label,
+.gradio-container label *,
+.gradio-container .label-wrap,
+.gradio-container .label-wrap *,
+.gradio-container [class*="label-wrap"],
+.gradio-container [class*="label-wrap"] *,
+.gradio-container [data-testid*="label"],
+.gradio-container [data-testid*="label"] * {
+    color: var(--txt) !important;
+    -webkit-text-fill-color: var(--txt) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    opacity: 1 !important;
+}
 
-/* Buttons */
-.nm-cta button { background: var(--acc) !important; color: #fff !important; border: none !important;
-    border-radius: var(--rs) !important; font-weight: 600 !important; font-size: 13px !important;
-    padding: 9px 22px !important; box-shadow: none !important; transition: background .15s !important;
-    cursor: pointer !important; }
-.nm-cta button:hover { background: var(--acc2) !important; }
-.nm-sec button { background: var(--surf) !important; border: 1px solid var(--brd) !important;
-    border-radius: var(--rs) !important; color: var(--txt) !important; font-size: 13px !important;
-    padding: 8px 16px !important; box-shadow: none !important;
-    transition: border-color .15s, color .15s !important; }
+/* ─────────────────────────────────────────────────────────────
+   Dashboard row layout
+   ───────────────────────────────────────────────────────────── */
+.nm-dash-row { gap: 14px !important; align-items: stretch !important; }
+.nm-dash-row > .nm-section {
+    min-width: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 360px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Buttons
+   ───────────────────────────────────────────────────────────── */
+.nm-cta button {
+    background: var(--acc) !important; color: #fff !important;
+    border: none !important; border-radius: var(--rs) !important;
+    font-weight: 600 !important; font-size: 13px !important;
+    padding: 10px 22px !important; box-shadow: none !important;
+    transition: background .15s, transform .05s !important;
+    cursor: pointer !important;
+}
+.nm-cta button:hover  { background: var(--acc2) !important; }
+.nm-cta button:active { transform: translateY(1px); }
+
+.nm-sec button {
+    background: var(--surf) !important;
+    border: 1px solid var(--brd) !important;
+    border-radius: var(--rs) !important;
+    color: var(--txt) !important;
+    font-size: 13px !important; padding: 8px 16px !important;
+    box-shadow: none !important;
+    transition: border-color .15s, color .15s !important;
+}
 .nm-sec button:hover { border-color: var(--acc) !important; color: var(--acc) !important; }
-.nm-del button { background: rgba(248,81,73,.1) !important; border: 1px solid rgba(248,81,73,.25) !important;
-    border-radius: var(--rs) !important; color: #ff7b72 !important; font-size: 13px !important;
-    font-weight: 600 !important; padding: 8px 14px !important; box-shadow: none !important;
-    transition: background .15s, border-color .15s !important; cursor: pointer !important; }
-.nm-del button:hover { background: rgba(248,81,73,.2) !important; border-color: rgba(248,81,73,.5) !important; }
 
-/* Result */
-.nm-result { border: 1px solid rgba(63,185,80,.3); background: rgba(63,185,80,.06);
-    border-radius: var(--rs); padding: 12px 14px; margin-top: 8px; }
+/* ─────────────────────────────────────────────────────────────
+   Result banner
+   ───────────────────────────────────────────────────────────── */
+.nm-result {
+    border: 1px solid var(--acc-ring); background: var(--acc-bg);
+    border-radius: var(--rs); padding: 12px 14px; margin-top: 10px;
+}
 .nm-result-name { font-size: 14px; font-weight: 600; color: var(--acc); margin-bottom: 10px; }
 .nm-result-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
-.nm-ri { text-align: center; padding: 8px 4px; background: var(--surf);
-    border: 1px solid var(--brd); border-radius: var(--rs); }
+.nm-ri { text-align: center; padding: 8px 4px;
+    background: var(--surf); border: 1px solid var(--brd); border-radius: var(--rs); }
 .nm-ri-v { font-size: 16px; font-weight: 700; color: var(--txt); }
-.nm-ri-l { font-size: 9px; color: var(--mut); margin-top: 2px; text-transform: uppercase; letter-spacing: .3px; }
-.nm-ri-cal .nm-ri-v { color: var(--cal); }
-.nm-ri-pro .nm-ri-v { color: var(--pro); }
+.nm-ri-l { font-size: 9px; color: var(--mut); margin-top: 2px;
+    text-transform: uppercase; letter-spacing: .3px; }
+.nm-ri-cal  .nm-ri-v { color: var(--cal); }
+.nm-ri-pro  .nm-ri-v { color: var(--pro); }
 .nm-ri-carb .nm-ri-v { color: var(--carb); }
-.nm-ri-fat .nm-ri-v { color: var(--fat); }
+.nm-ri-fat  .nm-ri-v { color: var(--fat); }
 
-/* Meal list */
-.nm-meal-list { max-height: 280px; overflow-y: auto; scrollbar-width: thin;
-    scrollbar-color: var(--brd) transparent; }
+/* ─────────────────────────────────────────────────────────────
+   Meal list
+   ───────────────────────────────────────────────────────────── */
+.nm-meal-list {
+    max-height: 320px !important;
+    overflow-y: auto !important;
+    scrollbar-width: thin;
+    scrollbar-color: var(--brd) transparent;
+    padding: 0 !important;
+    gap: 0 !important;
+}
 .nm-meal-list::-webkit-scrollbar { width: 4px; }
 .nm-meal-list::-webkit-scrollbar-thumb { background: var(--brd); border-radius: 2px; }
-.nm-row { display: flex; justify-content: space-between; align-items: center;
-    padding: 8px 0; border-bottom: 1px solid var(--brd); gap: 8px; }
-.nm-row:last-child { border-bottom: none; }
-.nm-row-left { flex: 1; min-width: 0; }
-.nm-row-name { font-size: 13px; font-weight: 500; color: var(--txt);
+.nm-hist-list { max-height: 560px !important; }
+
+.nm-meal-row {
+    align-items: center !important;
+    padding: 8px 0 !important;
+    border-bottom: 1px solid var(--brd) !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    margin: 0 !important;
+}
+.nm-meal-row:last-child { border-bottom: none !important; }
+.nm-meal-row-html { flex: 1 !important; min-width: 0 !important; }
+
+.nm-row-content {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; min-width: 0;
+}
+.nm-row-left  { flex: 1; min-width: 0; }
+.nm-row-name  { font-size: 13px; font-weight: 500; color: var(--txt);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nm-row-time { font-size: 11px; color: var(--mut); margin-top: 1px; }
-.nm-row-pills { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
-.nm-pill { font-size: 10px; padding: 2px 6px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
-.nm-p-cal { background: rgba(249,115,22,.12); color: var(--cal); }
-.nm-p-pro { background: rgba(63,185,80,.12); color: var(--pro); }
-.nm-p-carb { background: rgba(88,166,255,.12); color: var(--carb); }
-.nm-p-fat { background: rgba(240,194,75,.12); color: var(--fat); }
+.nm-row-time  { font-size: 11px; color: var(--mut); margin-top: 2px; }
+.nm-row-pills { display: flex; gap: 4px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
+    justify-content: flex-end; }
+.nm-pill { font-size: 10px; padding: 2px 7px; border-radius: 20px;
+    font-weight: 500; white-space: nowrap; }
+.nm-p-cal  { background: var(--cal-bg);  color: var(--cal);  }
+.nm-p-pro  { background: var(--pro-bg);  color: var(--pro);  }
+.nm-p-carb { background: var(--carb-bg); color: var(--carb); }
+.nm-p-fat  { background: var(--fat-bg);  color: var(--fat);  }
 
-/* Delete row */
-.nm-del-row { padding-top: 10px; border-top: 1px solid var(--brd); margin-top: 6px;
-    gap: 6px !important; align-items: flex-end !important; }
-.nm-del-row .wrap, .nm-del-row .block { background: transparent !important; border: none !important; }
-.nm-del-row label, .nm-del-row .label-wrap span {
-    color: var(--mut) !important; font-size: 11px !important; font-weight: 500 !important; }
-.nm-del-msg { font-size: 11px; color: var(--mut); display: block; min-height: 16px; }
-.nm-del-ok { color: var(--acc); }
-.nm-del-err { color: #ff7b72; }
+.nm-row-trash button {
+    background: transparent !important;
+    border: 1px solid var(--brd) !important;
+    color: var(--mut) !important;
+    font-size: 14px !important;
+    line-height: 1 !important;
+    padding: 0 !important;
+    width: 36px !important;
+    height: 32px !important;
+    min-width: 36px !important;
+    border-radius: var(--rs) !important;
+    box-shadow: none !important;
+    cursor: pointer !important;
+    transition: border-color .15s, color .15s, background .15s !important;
+    margin: 0 !important;
+}
+.nm-row-trash button:hover {
+    border-color: var(--err) !important;
+    color: var(--err) !important;
+    background: var(--err-bg) !important;
+}
 
-/* Dropdown overrides */
-.nm-dropdown input[type="text"] { background: var(--surf) !important;
-    border: 1px solid var(--brd) !important; color: var(--txt) !important;
-    font-size: 12px !important; border-radius: var(--rs) !important; }
-.nm-dropdown ul { background: var(--card) !important; border: 1px solid var(--brd) !important;
-    border-radius: var(--rs) !important; }
-.nm-dropdown li { color: var(--txt) !important; font-size: 12px !important; }
-.nm-dropdown li:hover, .nm-dropdown li[class*="active"], .nm-dropdown li[aria-selected="true"] {
-    background: var(--surf) !important; }
-.nm-dropdown .wrap, .nm-dropdown .block { background: transparent !important; border: none !important; }
+/* ─────────────────────────────────────────────────────────────
+   Settings status message (shared for "saved" confirmations)
+   ───────────────────────────────────────────────────────────── */
+.nm-del-msg { font-size: 11px; color: var(--mut); display: block; min-height: 16px; margin-top: 4px; }
+.nm-del-ok  { color: var(--acc); }
 
-/* History table */
-.nm-table-wrap { max-height: 420px; overflow-y: auto; scrollbar-width: thin;
-    scrollbar-color: var(--brd) transparent; }
-.nm-table-wrap::-webkit-scrollbar { width: 4px; }
-.nm-table-wrap::-webkit-scrollbar-thumb { background: var(--brd); border-radius: 2px; }
-.nm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.nm-th { text-align: left; padding: 7px 8px; color: var(--mut); font-size: 10px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: .4px; border-bottom: 2px solid var(--brd);
-    white-space: nowrap; background: var(--card); position: sticky; top: 0; z-index: 1; }
-.nm-th-r { text-align: right; }
-.nm-td { padding: 8px 8px; border-bottom: 1px solid var(--brd); color: var(--txt); vertical-align: middle; }
-.nm-td-name { font-weight: 500; }
-.nm-td-desc { color: var(--mut); font-size: 11px; max-width: 220px; }
-.nm-td-r { text-align: right; font-variant-numeric: tabular-nums; }
-tr:last-child .nm-td { border-bottom: none; }
-tr:hover .nm-td { background: rgba(255,255,255,.02); }
+/* ─────────────────────────────────────────────────────────────
+   Settings
+   ───────────────────────────────────────────────────────────── */
+.nm-goals-row { gap: 12px !important; }
 
-/* Settings */
-.nm-goals-row { gap: 10px !important; }
-.nm-goals-row .wrap, .nm-goals-row .block { background: transparent !important; border: none !important; }
+/* ─────────────────────────────────────────────────────────────
+   Utility blocks
+   ───────────────────────────────────────────────────────────── */
+.nm-err {
+    padding: 9px 12px; background: var(--err-bg);
+    border: 1px solid var(--err-brd); border-radius: var(--rs);
+    color: var(--err); font-size: 12px; margin-top: 8px;
+}
+.nm-info {
+    padding: 7px 12px; background: var(--info-bg);
+    border: 1px solid var(--info-brd); border-radius: var(--rs);
+    color: var(--carb); font-size: 11px; margin-bottom: 8px;
+}
+.nm-empty { text-align: center; padding: 28px 12px; color: var(--mut); font-size: 13px; }
 
-/* Utils */
-.nm-err { padding: 8px 12px; background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.25);
-    border-radius: var(--rs); color: #ff7b72; font-size: 12px; margin-top: 6px; }
-.nm-info { padding: 6px 12px; background: rgba(88,166,255,.08); border: 1px solid rgba(88,166,255,.2);
-    border-radius: var(--rs); color: var(--carb); font-size: 11px; margin-bottom: 8px; }
-.nm-empty { text-align: center; padding: 24px 12px; color: var(--mut); font-size: 13px; }
+/* ─────────────────────────────────────────────────────────────
+   Responsive
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+    .nm-stats { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 860px) {
+    .nm-main { padding: 16px !important; }
+    .nm-dash-row { flex-direction: column !important; }
+    .nm-dash-row > div { width: 100% !important; }
+    .nm-goals-row { flex-wrap: wrap !important; }
+    .nm-goals-row > * { flex: 1 1 calc(50% - 6px) !important; min-width: 130px !important; }
+}
+@media (max-width: 560px) {
+    .nm-stats { grid-template-columns: 1fr; }
+    .nm-result-grid { grid-template-columns: repeat(2, 1fr); }
+    .nm-row-content { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .nm-row-pills { width: 100%; justify-content: flex-start; }
+}
 """
 
 JS = "function(){document.documentElement.style.colorScheme='dark';}"
@@ -551,11 +794,24 @@ asyncio.run(init_db())
 
 with gr.Blocks(title="NutriMind") as demo:
 
-    with gr.Sidebar(open=True, width=210):
+    with gr.Sidebar(open=True, width=220):
         gr.HTML(
             '<div class="nm-brand">'
-            '<div class="nm-brand-name">\U0001F33F NutriMind</div>'
-            '<div class="nm-brand-tag">Inteligentne \u015bledzenie kalorii</div>'
+            '<div class="nm-brand-row">'
+            '<svg class="nm-brand-logo" viewBox="0 0 40 40" width="36" height="36" aria-hidden="true">'
+            '<defs><linearGradient id="nmg" x1="0" y1="0" x2="1" y2="1">'
+            '<stop offset="0%" stop-color="#3fb950"/>'
+            '<stop offset="100%" stop-color="#58a6ff"/>'
+            '</linearGradient></defs>'
+            '<rect x="2" y="2" width="36" height="36" rx="10" fill="url(#nmg)"/>'
+            '<path d="M13 26c0-7 4-12 14-13-1 9-6 13-13 13-1 0-1 0-1 0z" '
+            'fill="#fff" opacity=".95"/>'
+            '<path d="M13 27c2-4 5-7 11-9" stroke="#fff" stroke-width="1.4" '
+            'stroke-linecap="round" fill="none" opacity=".55"/>'
+            '</svg>'
+            '<span class="nm-brand-name">NutriMind</span>'
+            '</div>'
+            '<div class="nm-brand-tag">\u015aledzenie kalorii AI</div>'
             '</div>'
         )
         with gr.Column(elem_classes=["nm-nav"]):
@@ -572,16 +828,31 @@ with gr.Blocks(title="NutriMind") as demo:
         with gr.Row(elem_classes=["nm-dash-row"]):
             with gr.Column(scale=3, elem_classes=["nm-section"]):
                 gr.HTML('<div class="nm-section-title">\U0001F552 Dzisiejsze posi\u0142ki</div>')
-                recent_out = gr.HTML(build_recent_html([]))
-                with gr.Row(elem_classes=["nm-del-row"]):
-                    del_dropdown_dash = gr.Dropdown(
-                        label="Posi\u0142ek do usuni\u0119cia",
-                        choices=[], interactive=True, scale=3,
-                        elem_classes=["nm-dropdown"],
-                    )
-                    with gr.Column(scale=0, min_width=90, elem_classes=["nm-del"]):
-                        btn_del_dash = gr.Button("\U0001F5D1\ufe0f Usu\u0144")
-                del_status_dash = gr.HTML()
+                meals_state_dash = gr.State([])
+
+                @gr.render(inputs=[meals_state_dash])
+                def render_dash_meals(meals):
+                    if not meals:
+                        gr.HTML(
+                            '<div class="nm-empty">Brak posi\u0142k\u00f3w dzisiaj \u2014 '
+                            'dodaj pierwszy posi\u0142ek obok \u27a1</div>'
+                        )
+                        return
+                    with gr.Column(elem_classes=["nm-meal-list"]):
+                        for m in meals:
+                            with gr.Row(elem_classes=["nm-meal-row"]):
+                                gr.HTML(
+                                    _meal_row_inner_html(m),
+                                    elem_classes=["nm-meal-row-html"],
+                                )
+                                with gr.Column(
+                                    scale=0, min_width=44, elem_classes=["nm-row-trash"]
+                                ):
+                                    del_btn = gr.Button("\U0001F5D1\ufe0f")
+                                del_btn.click(
+                                    fn=functools.partial(handle_delete_meal, m["id"]),
+                                    outputs=[stats_out, meals_state_dash],
+                                )
 
             with gr.Column(scale=2, elem_classes=["nm-section"]):
                 gr.HTML('<div class="nm-section-title">\u2795 Dodaj posi\u0142ek</div>')
@@ -613,16 +884,29 @@ with gr.Blocks(title="NutriMind") as demo:
                 with gr.Column(scale=0, min_width=100, elem_classes=["nm-sec"]):
                     btn_filter = gr.Button("Filtruj")
             hist_status = gr.HTML()
-            hist_out = gr.HTML()
-            with gr.Row(elem_classes=["nm-del-row"]):
-                del_dropdown_hist = gr.Dropdown(
-                    label="Posi\u0142ek do usuni\u0119cia",
-                    choices=[], interactive=True, scale=3,
-                    elem_classes=["nm-dropdown"],
-                )
-                with gr.Column(scale=0, min_width=90, elem_classes=["nm-del"]):
-                    btn_del_hist = gr.Button("\U0001F5D1\ufe0f Usu\u0144")
-            del_status_hist = gr.HTML()
+            hist_state = gr.State([])
+
+            @gr.render(inputs=[hist_state])
+            def render_hist_meals(meals):
+                if not meals:
+                    gr.HTML('<div class="nm-empty">Brak posi\u0142k\u00f3w.</div>')
+                    return
+                with gr.Column(elem_classes=["nm-meal-list", "nm-hist-list"]):
+                    for m in meals:
+                        with gr.Row(elem_classes=["nm-meal-row"]):
+                            gr.HTML(
+                                _history_row_inner_html(m),
+                                elem_classes=["nm-meal-row-html"],
+                            )
+                            with gr.Column(
+                                scale=0, min_width=44, elem_classes=["nm-row-trash"]
+                            ):
+                                del_btn = gr.Button("\U0001F5D1\ufe0f")
+                            del_btn.click(
+                                fn=functools.partial(handle_delete_history, m["id"]),
+                                inputs=[hist_date],
+                                outputs=[hist_state, hist_status, meals_state_dash, stats_out],
+                            )
 
     # ── Ustawienia ─────────────────────────────────────────────
     with gr.Column(visible=False, elem_classes=["nm-main"]) as page_settings:
@@ -655,16 +939,16 @@ with gr.Blocks(title="NutriMind") as demo:
     # ── Events ─────────────────────────────────────────────────
     btn_analyze.click(
         fn=handle_analyze,
-        inputs=[meal_input],
-        outputs=[error_out, result_out, stats_out, recent_out, del_dropdown_dash, meal_input],
+        inputs=[meal_input, meals_state_dash],
+        outputs=[error_out, result_out, stats_out, meals_state_dash, meal_input],
     )
     btn_dash.click(
         fn=go_dash,
-        outputs=[page_dash, page_hist, page_settings, stats_out, recent_out, del_dropdown_dash],
+        outputs=[page_dash, page_hist, page_settings, stats_out, meals_state_dash],
     )
     btn_hist.click(
         fn=go_hist,
-        outputs=[page_dash, page_hist, page_settings, hist_out, hist_status, del_dropdown_hist],
+        outputs=[page_dash, page_hist, page_settings, hist_state, hist_status],
     )
     btn_settings_nav.click(
         fn=go_settings,
@@ -673,17 +957,7 @@ with gr.Blocks(title="NutriMind") as demo:
     btn_filter.click(
         fn=handle_history,
         inputs=[hist_date],
-        outputs=[hist_out, hist_status, del_dropdown_hist],
-    )
-    btn_del_dash.click(
-        fn=handle_delete_dash,
-        inputs=[del_dropdown_dash],
-        outputs=[stats_out, recent_out, del_dropdown_dash, del_status_dash],
-    )
-    btn_del_hist.click(
-        fn=handle_delete_hist,
-        inputs=[del_dropdown_hist, hist_date],
-        outputs=[hist_out, hist_status, del_dropdown_hist, del_status_hist],
+        outputs=[hist_state, hist_status],
     )
     btn_save.click(
         fn=handle_save_goals,
@@ -691,7 +965,7 @@ with gr.Blocks(title="NutriMind") as demo:
         outputs=[settings_status],
     )
     btn_theme.click(fn=None, js=THEME_JS)
-    demo.load(fn=load_dashboard, outputs=[stats_out, recent_out, del_dropdown_dash])
+    demo.load(fn=load_dashboard, outputs=[stats_out, meals_state_dash])
 
 
 if __name__ == "__main__":
