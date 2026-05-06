@@ -82,6 +82,20 @@ def test_get_meal_not_found(client):
     assert response.status_code == 404
 
 
+def test_delete_meal_success(client):
+    with patch("app.main.analyze_meal", new=AsyncMock(return_value=SAMPLE_ANALYSIS)):
+        created = client.post("/meals", json={"description": "obiad"}).json()
+
+    response = client.delete(f"/meals/{created['id']}")
+    assert response.status_code == 204
+    assert client.get(f"/meals/{created['id']}").status_code == 404
+
+
+def test_delete_meal_not_found(client):
+    response = client.delete("/meals/9999")
+    assert response.status_code == 404
+
+
 def test_summary_no_meals(client):
     response = client.get("/summary?date=2000-01-01")
     assert response.status_code == 404

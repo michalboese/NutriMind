@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from app.agent import analyze_meal
-from app.database import get_daily_summary, get_meal, get_meals, init_db, save_meal
+from app.database import delete_meal, get_daily_summary, get_meal, get_meals, init_db, save_meal
 from app.models import DailySummary, MealRecord, MealRequest
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -72,6 +72,17 @@ async def read_meal(meal_id: int):
     if not record:
         raise HTTPException(status_code=404, detail="Meal not found")
     return record
+
+
+@app.delete("/meals/{meal_id}", status_code=204)
+async def remove_meal(meal_id: int):
+    """Delete a meal by id."""
+    try:
+        deleted = await delete_meal(meal_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=f"Database error: {e}")
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Meal not found")
 
 
 @app.get("/summary", response_model=DailySummary)
