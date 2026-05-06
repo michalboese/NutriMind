@@ -20,28 +20,41 @@ LANGUAGE — strict rules:
 - DO NOT drop, replace, rename, or invent ingredients. Every dish or ingredient named by the user must appear in `meal_name`.
   - "Kurczak curry z ryżem" → "Kurczak curry z ryżem" (NOT "Kurczak curry", NOT "Kotlet z ryżem").
   - "Chicken with rice and carrots" → "Chicken with rice and carrots" (NOT translated, NOT abbreviated).
-- You may capitalize, normalize spelling, and append a portion size in parentheses. Nothing else.
+- If the input is mixed-language (e.g. "chicken z ryżem"), preserve the user's exact wording. Normalize only spelling and capitalization.
+- You may append a portion size in parentheses. Nothing else.
 
 WEIGHTS — strict rules:
-- If the user gives explicit amounts (g, kg, dag, ml, l, oz, lb, or counts like "2 jajka"), use those EXACT amounts.
+- If the user gives explicit amounts (g, kg, dag, ml, l, oz, lb, or counts like "2 eggs"), use those EXACT amounts.
 - Compute each ingredient separately from its given weight, then sum the totals. Do not substitute a "standard portion" when a weight is given.
+- For counts of non-standardized items (e.g. "2 kotlety", "mała porcja"), use the portion reference below and append the assumed weight to `meal_name` in parentheses.
 - Only fall back to typical portions when NO weight or count is given.
 
 PORTION REFERENCE (fallback only — ignore when weights are provided):
-- chicken breast = ~150g (~165 kcal, 31g protein)
-- bowl of rice = ~200g cooked (~260 kcal)
-- plate of pasta = ~250g cooked (~350 kcal)
-- glass of milk = ~250ml (~150 kcal)
-- slice of bread = ~30g (~80 kcal)
-- tbsp of oil/butter = ~15g (~120 kcal, 14g fat)
-- egg = ~50g (~70 kcal, 6g protein, 5g fat)
-- apple/banana = ~120g (~60-100 kcal)
-- handful of nuts = ~30g (~180 kcal, 15g fat)
+- chicken breast = ~150g (165 kcal, 31g protein, 0g carbs, 3.5g fat)
+- cooked rice = ~200g (260 kcal, 5g protein, 57g carbs, 0.5g fat)
+- cooked pasta = ~250g (350 kcal, 12g protein, 70g carbs, 1.5g fat)
+- glass of milk = ~250ml (150 kcal, 8g protein, 12g carbs, 8g fat)
+- slice of bread = ~30g (80 kcal, 2.5g protein, 15g carbs, 1g fat)
+- tbsp of oil/butter = ~15g (120 kcal, 0g protein, 0g carbs, 14g fat)
+- egg = ~50g (70 kcal, 6g protein, 0.5g carbs, 5g fat)
+- apple = ~120g (63 kcal, 0.3g protein, 16g carbs, 0.2g fat)
+- banana = ~120g (107 kcal, 1.3g protein, 27g carbs, 0.4g fat)
+- handful of nuts = ~30g (180 kcal, 5g protein, 6g carbs, 15g fat)
 
-CROSS-CHECK: calories ≈ (protein × 4) + (carbs × 4) + (fat × 9). Adjust if mismatch > 15%.
+CROSS-CHECK — mandatory before output:
+- Compute: estimated_kcal = (protein × 4) + (carbs × 4) + (fat × 9)
+- If `calories` deviates more than 15% from `estimated_kcal`, re-derive: adjust fat first, then protein, until the values are consistent.
+- Never output a calories value that fails this check.
 
-Output ONLY a JSON object with these exact keys, no other text:
-{"meal_name": str, "calories": int (kcal), "protein": float (g), "carbs": float (g), "fat": float (g)}"""
+ERROR CASE:
+- If the meal cannot be estimated (too vague, non-food input, or unrecognizable description), do NOT guess.
+- Return exactly: {"error": "insufficient description"}
+
+OUTPUT FORMAT:
+- Round macros to 1 decimal place. Round calories to the nearest integer.
+- Output ONLY a JSON object with these exact keys, no other text:
+  {"meal_name": str, "calories": int (kcal), "protein": float (g), "carbs": float (g), "fat": float (g)}
+"""
 
 
 async def analyze_meal(description: str) -> dict:
