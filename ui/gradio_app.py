@@ -60,16 +60,36 @@ def _history_status_html(meals, ds):
 def _ring(pct, color):
     r, sw = 28, 5
     circ = 2 * 3.14159 * r
-    fill = min(pct / 100 * circ, circ)
-    gap = circ - fill
+    red = "#e93528"
+
+    if pct <= 100:
+        fill = pct / 100 * circ
+        gap = circ - fill
+        return (
+            f'<svg width="68" height="68" viewBox="0 0 68 68">'
+            f'<circle cx="34" cy="34" r="{r}" fill="none" stroke="var(--brd)" stroke-width="{sw}"/>'
+            f'<circle cx="34" cy="34" r="{r}" fill="none" stroke="{color}" stroke-width="{sw}" '
+            f'stroke-dasharray="{fill:.1f} {gap:.1f}" stroke-linecap="round" '
+            f'transform="rotate(-90 34 34)"/>'
+            f'<text x="34" y="38" text-anchor="middle" font-size="11" font-weight="700" '
+            f'fill="{color}" font-family="inherit">{pct}%</text>'
+            f'</svg>'
+        )
+
+    # Over goal: full normal ring underneath + red overage arc looping fresh
+    # from the top clockwise, length = overage % of goal (capped at 100%).
+    over_pct = min(pct - 100, 100)
+    red_fill = over_pct / 100 * circ
+
     return (
         f'<svg width="68" height="68" viewBox="0 0 68 68">'
         f'<circle cx="34" cy="34" r="{r}" fill="none" stroke="var(--brd)" stroke-width="{sw}"/>'
-        f'<circle cx="34" cy="34" r="{r}" fill="none" stroke="{color}" stroke-width="{sw}" '
-        f'stroke-dasharray="{fill:.1f} {gap:.1f}" stroke-linecap="round" '
+        f'<circle cx="34" cy="34" r="{r}" fill="none" stroke="{color}" stroke-width="{sw}"/>'
+        f'<circle cx="34" cy="34" r="{r}" fill="none" stroke="{red}" stroke-width="{sw}" '
+        f'stroke-dasharray="{red_fill:.1f} {circ - red_fill:.1f}" stroke-linecap="round" '
         f'transform="rotate(-90 34 34)"/>'
         f'<text x="34" y="38" text-anchor="middle" font-size="11" font-weight="700" '
-        f'fill="{color}" font-family="inherit">{pct}%</text>'
+        f'fill="{red}" font-family="inherit">{pct}%</text>'
         f'</svg>'
     )
 
@@ -82,10 +102,10 @@ def build_stats_html(summary, goals=None):
     }
     today_str = date.today().strftime("%A, %d %B %Y")
 
-    pct_cal  = min(100, round(s["total_calories"] / max(goals["calories"], 1) * 100))
-    pct_pro  = min(100, round(s["total_protein"]  / max(goals["protein"], 1)  * 100))
-    pct_carb = min(100, round(s["total_carbs"]    / max(goals["carbs"], 1)    * 100))
-    pct_fat  = min(100, round(s["total_fat"]      / max(goals["fat"], 1)      * 100))
+    pct_cal  = round(s["total_calories"] / max(goals["calories"], 1) * 100)
+    pct_pro  = round(s["total_protein"]  / max(goals["protein"], 1)  * 100)
+    pct_carb = round(s["total_carbs"]    / max(goals["carbs"], 1)    * 100)
+    pct_fat  = round(s["total_fat"]      / max(goals["fat"], 1)      * 100)
 
     def _card(cls, emoji, label, ring, val, unit, goal_val, goal_unit):
         return (
