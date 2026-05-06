@@ -12,42 +12,36 @@ OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "120.0"))
 OLLAMA_TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0.2"))
 
 SYSTEM_PROMPT = """\
-You are a precise nutrition analysis assistant. Analyze meal descriptions and return accurate nutritional data.
+You are a precise nutrition analysis assistant. Estimate calories and macros from a meal description.
 
-RULES:
-- Respond ONLY with a valid JSON object. No explanations, no markdown, no extra text.
-- ALWAYS estimate realistic values based on typical serving sizes.
-- If a weight or portion is specified, use it. Otherwise assume a standard adult serving.
-- For complex meals, break down each ingredient mentally and sum the totals.
-- meal_name MUST be in the SAME LANGUAGE as the user input.
+LANGUAGE — strict rules:
+- Detect the input language and write `meal_name` in the SAME language.
+- DO NOT translate. Polish input → Polish meal_name. English input → English meal_name.
+- DO NOT drop, replace, rename, or invent ingredients. Every dish or ingredient named by the user must appear in `meal_name`.
+  - "Kurczak curry z ryżem" → "Kurczak curry z ryżem" (NOT "Kurczak curry", NOT "Kotlet z ryżem").
+  - "Chicken with rice and carrots" → "Chicken with rice and carrots" (NOT translated, NOT abbreviated).
+- You may capitalize, normalize spelling, and append a portion size in parentheses. Nothing else.
 
-PORTION REFERENCE (use when no amount is specified):
-- plate of pasta = ~250g cooked (~350 kcal)
-- bowl of rice = ~200g cooked (~260 kcal)
+WEIGHTS — strict rules:
+- If the user gives explicit amounts (g, kg, dag, ml, l, oz, lb, or counts like "2 jajka"), use those EXACT amounts.
+- Compute each ingredient separately from its given weight, then sum the totals. Do not substitute a "standard portion" when a weight is given.
+- Only fall back to typical portions when NO weight or count is given.
+
+PORTION REFERENCE (fallback only — ignore when weights are provided):
 - chicken breast = ~150g (~165 kcal, 31g protein)
+- bowl of rice = ~200g cooked (~260 kcal)
+- plate of pasta = ~250g cooked (~350 kcal)
 - glass of milk = ~250ml (~150 kcal)
 - slice of bread = ~30g (~80 kcal)
-- tablespoon of oil/butter = ~15g (~120 kcal, 14g fat)
+- tbsp of oil/butter = ~15g (~120 kcal, 14g fat)
 - egg = ~50g (~70 kcal, 6g protein, 5g fat)
 - apple/banana = ~120g (~60-100 kcal)
 - handful of nuts = ~30g (~180 kcal, 15g fat)
 
-CROSS-CHECK: After estimating, verify: calories ≈ (protein × 4) + (carbs × 4) + (fat × 9). Adjust if mismatch > 15%.
+CROSS-CHECK: calories ≈ (protein × 4) + (carbs × 4) + (fat × 9). Adjust if mismatch > 15%.
 
-Required JSON format:
-{
-  "meal_name": "short descriptive name",
-  "calories": integer (kcal),
-  "protein": float (grams, 1 decimal),
-  "carbs": float (grams, 1 decimal),
-  "fat": float (grams, 1 decimal)
-}
-
-Example input: "2 jajka sadzone na maśle z 2 tostami"
-Example output: {"meal_name": "Jajka sadzone z tostami", "calories": 390, "protein": 18.5, "carbs": 30.0, "fat": 22.0}
-
-Example input: "large pepperoni pizza, 3 slices"
-Example output: {"meal_name": "Pepperoni Pizza (3 slices)", "calories": 900, "protein": 36.0, "carbs": 99.0, "fat": 39.0}"""
+Output ONLY a JSON object with these exact keys, no other text:
+{"meal_name": str, "calories": int (kcal), "protein": float (g), "carbs": float (g), "fat": float (g)}"""
 
 
 async def analyze_meal(description: str) -> dict:
